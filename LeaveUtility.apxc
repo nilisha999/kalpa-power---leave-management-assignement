@@ -1,0 +1,37 @@
+public class LeaveUtility {
+    
+    // Method to get the number of leave days taken by an employee in a specific month
+    public static Integer getLeaveDays(String employeeId, String month) {
+        // Initialize leave days count
+        Integer leaveDays = 0;
+
+        // Parse the month string to get the year and month
+        Date firstDayOfMonth = Date.valueOf(month + '-01'); // Assuming month is in 'YYYY-MM' format
+        Date lastDayOfMonth = firstDayOfMonth.toStartOfMonth().addMonths(1).addDays(-1); // Get the last day of the month
+
+        // Query Leave_Request__c records for the specified employee and month
+        List<Leave_Request__c> leaveRequests = [
+            SELECT Id, From_Date__c, To_Date__c 
+            FROM Leave_Request__c 
+            WHERE Employee__c = :employeeId 
+            AND (From_Date__c <= :lastDayOfMonth 
+            AND To_Date__c >= :firstDayOfMonth)
+        ];
+
+        // Calculate total leave days
+        for (Leave_Request__c leave : leaveRequests) {
+            // Calculate the number of days taken for each leave request
+            Date startDate = leave.From_Date__c;
+            Date endDate = leave.To_Date__c;
+
+            // Ensure the dates are within the month range
+            Date effectiveStartDate = startDate < firstDayOfMonth ? firstDayOfMonth : startDate;
+            Date effectiveEndDate = endDate > lastDayOfMonth ? lastDayOfMonth : endDate;
+
+            // Calculate the number of days between effective start and end dates
+            leaveDays += effectiveEndDate.daysBetween(effectiveStartDate) + 1; // +1 to include the start day
+        }
+
+        return leaveDays;
+    }
+}
