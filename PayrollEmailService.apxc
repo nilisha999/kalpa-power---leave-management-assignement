@@ -1,0 +1,32 @@
+public class PayrollEmailService {
+    public static void sendSalarySlip(Payroll__c payrollRecord) {
+        // Check if the email has already been sent
+        if (payrollRecord.Email_Sent__c) {
+            return; // Exit if email has already been sent
+        }
+
+        // Prepare the email details
+        String subject = 'Your Monthly Salary Slip';
+        String body = 'Dear ' + payrollRecord.Employee__r.Name + ',\n\n' +
+                      'Here is your salary slip for the month of ' + payrollRecord.Month__c + ':\n\n' +
+                      'Basic Salary: ' + payrollRecord.Basic_Salary__c + '\n' +
+                      'Allowance: ' + payrollRecord.Allowance__c + '\n' +
+                      'Leave Deductions: ' + payrollRecord.Leave_Deduction__c + '\n' +
+                      'Net Salary: ' + payrollRecord.Net_Salary__c + '\n\n' +
+                      'Thank you,\n' +
+                      'HR Team';
+
+        // Create a new email message
+        Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+        email.setToAddresses(new String[] { payrollRecord.Employee__r.Email__c });
+        email.setSubject(subject);
+        email.setPlainTextBody(body);
+
+        // Send the email
+        Messaging.sendEmail(new Messaging.SingleEmailMessage[] { email });
+
+        // Update the Payroll record to indicate that the email has been sent
+        payrollRecord.Email_Sent__c = true;
+        update payrollRecord;
+    }
+}
