@@ -1,0 +1,38 @@
+@isTest
+public class PayrollBatchTest {
+    @isTest
+    static void testPayrollBatch() {
+        // Create test data
+        Employee__c employee = new Employee__c(Name = 'Test Employee', Basic_Salary__c = 5000);
+        insert employee;
+
+        // Create attendance record for the current month
+        String currentMonth = DateTime.now().format('MMMM');
+        Attendance__c attendance = new Attendance__c(Employee__c = employee.Id, Month__c = currentMonth, Present_Days__c = '20', Working_Days__c = '30');
+        insert attendance;
+
+        // Create a leave request for the employee
+        Leave_Request__c leaveRequest = new Leave_Request__c(Employee__c = employee.Id, Leave_Type__c = 'Sick', From_Date__c = Date.today(), To_Date__c = Date.today(), Status__c = 'Pending');
+        insert leaveRequest;
+
+        // Execute the batch
+        Test.startTest();
+        PayrollBatch batch = new PayrollBatch();
+        Database.executeBatch(batch);
+        Test.stopTest();
+
+        // Verify the results
+        List<Payroll__c> payrolls = [SELECT Id, Employee__c, Month__c, Basic_Salary__c, Leave_Deduction__c, Net_Salary__c FROM Payroll__c WHERE Employee__c = :employee.Id];
+        System.assertEquals(1, payrolls.size(), 'There should be one payroll record created.');
+        System.assertEquals(employee.Basic_Salary__c, payrolls[0].Basic_Salary__c, 'Basic Salary should match.');
+
+        // Calculate expected leave deduction
+        Integer unapprovedLeaveDays = 1; // Since we created one leave request for today
+        Decimal expectedLeaveDeduction = (employee.Basic_Salary__c / Decimal.valueOf(attendance.Working_Days__c)) * unapprovedLeaveDays;
+        Decimal expectedNetSalary = employee.Basic_Salary__c - expectedLeaveDeduction;
+
+        // Verify leave deduction and net salary
+        System.assertEquals(expectedLeaveDeduction, payrolls[0].Leave_Deduction__c, 'Leave Deduction should match.');
+        System.assertEquals(expectedNetSalary, payrolls[0].Net_Salary__c, 'Net Salary should match.');
+    }
+}
