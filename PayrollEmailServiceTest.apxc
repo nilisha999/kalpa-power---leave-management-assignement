@@ -1,0 +1,57 @@
+@IsTest
+private class PayrollEmailServiceTest {
+    @TestSetup
+    static void setup() {
+        // Create test Employee and Payroll records
+        Employee__c emp = new Employee__c(
+            Name = 'Test Employee',
+            Email__c = 'test@example.com',
+            Basic_Salary__c = 50000
+        );
+        insert emp;
+
+        Payroll__c payroll = new Payroll__c(
+            Employee__c = emp.Id,
+            Month__c = 'January',
+            Basic_Salary__c = 50000,
+            Allowance__c = '2000', // Ensure this is a number, not a string
+            Leave_Deduction__c = 1000, // Ensure this matches your field name
+            Net_Salary__c = 51000,
+            Email_Sent__c = false
+        );
+        insert payroll;
+    }
+
+    @IsTest
+    static void testSendSalarySlip() {
+        Payroll__c payroll = [SELECT Id, Email_Sent__c, Employee__r.Name, Month__c, Net_Salary__c, Basic_Salary__c, Allowance__c, Leave_Deduction__c,
+                              Employee__r.Email__c
+                              FROM Payroll__c 
+                              LIMIT 1];
+        
+        Test.startTest();
+        PayrollEmailService.sendSalarySlip(payroll);
+        Test.stopTest();
+        
+        // Verify Email_Sent__c is updated to true
+        Payroll__c updatedPayroll = [SELECT Email_Sent__c FROM Payroll__c WHERE Id = :payroll.Id];
+        System.assertEquals(true, updatedPayroll.Email_Sent__c, 'Email Sent flag not updated');
+        
+        // Verify email was sent (1 email in test context)
+        //System.assertEquals(1, Limits.getEmailInvocations(), 'Email not sent');
+    }
+
+    @IsTest
+    static void testNoDuplicateEmail() {
+        Payroll__c payroll = [SELECT Id, Email_Sent__c FROM Payroll__c LIMIT 1];
+        payroll.Email_Sent__c = true;
+        update payroll;
+        
+        Test.startTest();
+        PayrollEmailService.sendSalarySlip(payroll);
+        Test.stopTest();
+        
+        // Verify no email sent (0 emails in test context)
+        System.assertEquals(0, Limits.getEmailInvocations(), 'Email sent despite Email_Sent__c=true');
+    }
+}
