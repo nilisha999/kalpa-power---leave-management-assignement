@@ -1,0 +1,150 @@
+/*
+@Nilisha Patil : 28-6-25   
+Scenario : On Approval of Leave_Request__c, update Attendance__c for that month.
+*/
+@IsTest
+public class LeaveRequestTriggerHandlerTestClass {
+	@TestSetup
+    static void makeData(){
+        // Create an Employee record
+        Employee__c emp = new Employee__c(
+        	Name = 'Test Employee'
+        );
+        insert emp;
+        
+        // Create an Attendance record for the employee for a specific month
+        Attendance__c att = new Attendance__c (
+        	Employee__c = emp.Id,
+            Month__c = '2025-06',
+            Working_Days__c = '22',
+            Present_Days__c = '22'
+        );
+        insert att;
+    }
+    
+    // Test Case 1 : Where an Approved leave request updates an existing attendance record.
+    @IsTest
+    static void testUpdateAttendance_ApprovedLeave(){
+        // Retrieve the test data created
+        Employee__c testEmployee = [Select Id From Employee__c Where Name = 'Test Employee' LIMIT 1];
+        Attendance__c testAttendance = [Select Id From Attendance__c Where Month__c = '2025-06' Limit 1];
+        // Create a new Approval leave Requestfor a few days in June 2025
+        Leave_Request__c leaveReq = new Leave_Request__c(
+        	Employee__c = testEmployee.Id,
+            From_Date__c = Date.newInstance(2025, 6, 10),
+            To_Date__c = Date.newInstance(2025,6,12),
+            Status__c = 'Approved',
+            Leave_Type__c = 'Vacation'
+        );
+        
+        // Count the business days for this leave request (Tue, Wed, Thursday = 3 days)
+        Integer expectedLeaveDays = LeaveRequestTriggerHandler.calculateBusinessDays(leaveReq.From_Date__c, leaveReq.To_Date__c);
+        
+        Test.startTest();
+        	LeaveRequestTriggerHandler.updateAttendance(new List<Leave_Request__c> {leaveReq});
+        Test.stopTest();
+        
+        // Verify the attendance record remains unchanged
+        // Total Present Days - expectedLeaveDays = 22 - 3 = 19
+    	Attendance__c unchangedAtt = [SELECT Present_Days__c FROM Attendance__c WHERE Id = :testAttendance.Id];
+    	System.assertEquals('19', unchangedAtt.Present_Days__c);
+    }
+    
+    //Test Case 2 : Approved Leave Request Creates New Attendance Record
+    @isTest
+    static void testUpdateAttendance_NotApprovedLeave(){
+        Employee__c testEmployee = [Select Id From Employee__c Where Name = 'Test Employee' Limit 1];
+        Attendance__c testAttendance = [Select Id From Attendance__c Where Month__c = '2025-06' Limit 1];
+        // Create a new Approval leave Requestfor a few days in June 2025
+        Leave_Request__c leaveReq = new Leave_Request__c(
+        	Employee__c = testEmployee.Id,
+            From_Date__c = Date.newInstance(2025, 6, 10),
+            To_Date__c = Date.newInstance(2025,6,12),
+            Status__c = 'Pending',
+            Leave_Type__c = 'Vacation'
+        );
+        
+        // Count the business days for this leave request (Tue, Wed, Thursday = 3 days)
+        Integer expectedLeaveDays = LeaveRequestTriggerHandler.calculateBusinessDays(leaveReq.From_Date__c, leaveReq.To_Date__c);
+        
+        Test.startTest();
+        LeaveRequestTriggerHandler.updateAttendance(new List<Leave_Request__c> {leaveReq});
+        Test.stopTest();
+        
+        // Verify the attendance record remains unchanged
+    	Attendance__c unchangedAtt = [SELECT Present_Days__c FROM Attendance__c WHERE Id = :testAttendance.Id];
+    	System.assertEquals('22', unchangedAtt.Present_Days__c);
+    }
+    
+    // Test Case 3 : Leave Request with Sick Leave Type Does Not Affect Present Days
+        @isTest
+        static void testUpdateAttendance_SickLeave_DoesNotAffectPresentDays(){
+            Employee__c testEmployee = [Select Id From Employee__c Where Name = 'Test Employee' Limit 1];
+            Attendance__c testAttendance = [Select Id From Attendance__c Where Month__c = '2025-06' Limit 1];
+            
+            // Create a new Approval leave Requestfor a few days in June 2025
+            Leave_Request__c leaveReq = new Leave_Request__c(
+                Employee__c = testEmployee.Id,
+                From_Date__c = Date.newInstance(2025, 6, 10),
+                To_Date__c = Date.newInstance(2025,6,12),
+                Status__c = 'Approved',
+                Leave_Type__c = 'Sick'
+        	);
+            
+            // Count the business days for this leave request (Tue, Wed, Thursday = 3 days)
+        Integer expectedLeaveDays = LeaveRequestTriggerHandler.calculateBusinessDays(leaveReq.From_Date__c, leaveReq.To_Date__c);
+            
+            Test.startTest();
+            	LeaveRequestTriggerHandler.updateAttendance(new List<Leave_Request__c> {leaveReq});
+            Test.stopTest();
+            
+            // Verify the attendance record remains unchanged
+    	Attendance__c unchangedAtt = [SELECT Present_Days__c FROM Attendance__c WHERE Id = :testAttendance.Id];
+    	System.assertEquals('22', unchangedAtt.Present_Days__c);
+        }
+    
+    // Test Case 4 : No Approved Leave Requests Does Not Affect Attendance
+    @isTest
+    static void testUpdateAttendance_NotApprovedLeave_DoesNotAffectAttendance(){
+        Employee__c testEmployee = [Select Id From Employee__c Where Name = 'Test Employee' Limit 1];
+        Attendance__c testAttendance = [Select Id From Attendance__c Where Month__c = '2025-06' Limit 1];
+        
+        // Create a new Approval leave Requestfor a few days in June 2025
+            Leave_Request__c leaveReq = new Leave_Request__c(
+                Employee__c = testEmployee.Id,
+                From_Date__c = Date.newInstance(2025, 6, 10),
+                To_Date__c = Date.newInstance(2025,6,12),
+                Status__c = 'Rejected',
+                Leave_Type__c = 'Vacation'
+        	);
+        
+        // Count the business days for this leave request (Tue, Wed, Thursday = 3 days)
+        Integer expectedLeaveDays = LeaveRequestTriggerHandler.calculateBusinessDays(leaveReq.From_Date__c, leaveReq.To_Date__c);
+        
+        Test.startTest();
+        	LeaveRequestTriggerHandler.updateAttendance(new List<Leave_Request__c> {leaveReq});
+        Test.stopTest();
+        
+        // Verify the attendance record remains unchanged
+    	Attendance__c unchangedAtt = [SELECT Present_Days__c FROM Attendance__c WHERE Id = :testAttendance.Id];
+    	System.assertEquals('22', unchangedAtt.Present_Days__c);
+    }
+    
+    // Test Case 5 : No Leave Request
+    @isTest
+    static void testUpdateAttendance_NoLeaveRequest(){
+        Employee__c testEmployee = [Select Id From Employee__c Where Name = 'Test Employee' Limit 1];
+        Attendance__c testAttendance = [Select Id From Attendance__c Where Month__c = '2025-06' Limit 1];
+        
+        
+        
+        // Call the handler with an empty list of leave request
+        Test.startTest();
+        	LeaveRequestTriggerHandler.updateAttendance(new List<Leave_Request__c>{});        	
+        Test.stopTest();
+        
+        // Verify the attendance record remains unchanged
+        Attendance__c unchangedAtt = [Select Present_Days__c From Attendance__c Where Id =: testAttendance.Id];
+        System.assertEquals('22', unchangedAtt.Present_Days__c);
+    }
+}
