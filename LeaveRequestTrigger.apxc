@@ -1,0 +1,18 @@
+/*
+@Nilisha Patil : 28-6-25
+Scenario : On Approval of Leave_Request__c, update Attendance__c for that month.
+*/
+trigger LeaveRequestTrigger on Leave_Request__c (before insert, after insert, after update) {
+    if(Trigger.isAfter){
+        if(Trigger.isUpdate){
+            for(Leave_Request__c leaveReq : Trigger.new){
+                Leave_Request__c oldLR = Trigger.oldMap.get(leaveReq.Status__c);
+                if(leaveReq.Status__c != null && leaveReq.Status__c != oldLR.Status__c && leaveReq.Status__c =='Approved'){
+                    LeaveRequestTriggerHandler.updateAttendance(Trigger.new);
+                }
+            }
+            
+            
+        }
+    }
+}
