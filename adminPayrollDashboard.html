@@ -1,0 +1,49 @@
+<template>
+  <lightning-card title="HR Payroll Dashboard" icon-name="standard:dashboard">
+    <div class="slds-p-around_medium">
+      <div class="slds-grid slds-gutters">
+        <div class="slds-col slds-size_1-of-2">
+          <lightning-combobox
+            label="Filter by Month"
+            value={monthFilter}
+            options={monthOptions}
+            onchange={handleFilterChange}
+            data-filter="month"
+          >
+          </lightning-combobox>
+        </div>
+        <div class="slds-col slds-size_1-of-2">
+          <lightning-input
+            label="Filter by Designation"
+            value={designationFilter}
+            onchange={handleFilterChange}
+            data-filter="designation"
+          >
+          </lightning-input>
+        </div>
+      </div>
+
+      <div class="slds-m-top_medium slds-text-align_right">
+        <lightning-button
+          label="Export to CSV"
+          onclick={handleExportCsv}
+          icon-name="utility:download"
+        ></lightning-button>
+      </div>
+
+      <template if:true={filteredPayrolls}>
+        <lightning-datatable
+          key-field="Id"
+          data={filteredPayrolls}
+          columns={columns}
+        >
+        </lightning-datatable>
+      </template>
+      <template if:false={filteredPayrolls}>
+        <div class="slds-align_absolute-center slds-m-top_large">
+          <p>No payroll data found for the selected filters.</p>
+        </div>
+      </template>
+    </div>
+  </lightning-card>
+</template>
