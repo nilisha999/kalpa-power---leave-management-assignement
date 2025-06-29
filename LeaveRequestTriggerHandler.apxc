@@ -1,0 +1,119 @@
+/*
+@Nilisha Patil : 28-6-25
+Scenario : On Approval of Leave_Request__c, update Attendance__c for that month.
+*/
+public class LeaveRequestTriggerHandler {
+    
+    public static void updateAttendance(List<Leave_Request__c> newLeaveRequests) {
+        // Use a try-catch block to handle any exceptions during the process
+        try {
+            // Use a set to collect unique Employee IDs and month-year strings from the leave requests
+            Set<Id> employeeIds = new Set<Id>();
+            Set<String> months = new Set<String>();
+
+            // Step 1: Collect all relevant Employee IDs and month-year strings from the new leave requests
+            for (Leave_Request__c lr : newLeaveRequests) {
+                // Check if the leave request is approved and has valid dates and employee
+                if (lr.Status__c == 'Approved' && lr.Employee__c != null && lr.From_Date__c != null) {
+                    employeeIds.add(lr.Employee__c);
+                    String monthYear = lr.From_Date__c.year() + '-' + String.valueOf(lr.From_Date__c.month()).leftPad(2, '0');
+                    months.add(monthYear);
+                }
+            }
+            
+            // If there are no approved leave requests, exit the method
+            if (employeeIds.isEmpty()) {
+                return;
+            }
+
+            // Step 2: Query for existing Attendance records for the collected employees and months
+            // Use a map to store attendance records with a composite key (EmployeeId-MonthYear) for easy access
+            Map<String, Attendance__c> attendanceMap = new Map<String, Attendance__c>();
+            List<Attendance__c> existingAttendance = [
+                SELECT Id, Employee__c, Month__c, Present_Days__c, Working_Days__c
+                FROM Attendance__c
+                WHERE Employee__c IN :employeeIds AND Month__c IN :months
+            ];
+            
+            for (Attendance__c att : existingAttendance) {
+                String mapKey = att.Employee__c + '-' + att.Month__c;
+                attendanceMap.put(mapKey, att);
+            }
+
+            // Step 3: Process the leave requests to update or create Attendance records
+            List<Attendance__c> attendanceToUpsert = new List<Attendance__c>();
+            for (Leave_Request__c lr : newLeaveRequests) {
+                // Re-check for approved status in case this handler is called from a different context
+                if (lr.Status__c == 'Approved' && lr.Employee__c != null && lr.From_Date__c != null) {
+                    String monthYear = lr.From_Date__c.year() + '-' + String.valueOf(lr.From_Date__c.month()).leftPad(2, '0');
+                    String mapKey = lr.Employee__c + '-' + monthYear;
+
+                    Attendance__c attendanceRecord;
+                    
+                    // Check if an attendance record for this employee and month already exists
+                    if (attendanceMap.containsKey(mapKey)) {
+                        // Update the existing record
+                        attendanceRecord = attendanceMap.get(mapKey);
+                    } else {
+                        // Create a new attendance record if one doesn't exist
+                        attendanceRecord = new Attendance__c(
+                            Employee__c = lr.Employee__c,
+                            Month__c = monthYear,
+                            Working_Days__c = '22',
+                            Present_Days__c = '22'  
+                        );
+                        // Add the new record to the map for subsequent leave requests in the same transaction
+                        attendanceMap.put(mapKey, attendanceRecord);
+                    }
+                    
+                    // Step 4: Calculate the number of leave days to subtract
+                    Integer leaveDays = calculateBusinessDays(lr.From_Date__c, lr.To_Date__c);
+
+                    // Update present days, but only for non-sick leaves
+                    if (lr.Leave_Type__c != 'Sick' && attendanceRecord.Present_Days__c != null) {
+                        // Convert the String value to an Integer for calculation
+                        Integer presentDaysInt = Integer.valueOf(attendanceRecord.Present_Days__c);
+                        presentDaysInt -= leaveDays;
+                        // Convert the calculated Integer back to a String for the Text field
+                        attendanceRecord.Present_Days__c = String.valueOf(presentDaysInt);
+                    }
+                    
+                    // Add the record to the list to be upserted
+                    attendanceToUpsert.add(attendanceRecord);
+                }
+            }
+            
+            // Step 5: Perform DML operation to update or insert records
+            if (!attendanceToUpsert.isEmpty()) {
+                upsert attendanceToUpsert;
+            }
+        } catch (Exception e) {
+            // Log any exceptions to the debug log
+            System.debug('An exception occurred while updating attendance records: ' + e.getMessage());
+            
+        }
+    }
+
+    
+    public static Integer calculateBusinessDays(Date startDate, Date endDate) {
+        Integer businessDays = 0;
+        Date tempDate = startDate;
+
+        while (tempDate <= endDate) {
+            // Convert the Date to a DateTime to use the format() method
+            
+            DateTime tempDateTime = DateTime.newInstance(tempDate.year(), tempDate.month(), tempDate.day());
+            
+            // Get the day of the week as an integer (1 = Monday, 2 = Tuesday, ..., 7 = Sunday)
+            Integer dayOfWeek = Integer.valueOf(tempDateTime.format('u'));
+
+            // Check if the day is not Saturday (6) or Sunday (7)
+            if (dayOfWeek < 6) { 
+                businessDays++;
+            }
+            tempDate = tempDate.addDays(1);
+        }
+
+        return businessDays;
+    }
+}
