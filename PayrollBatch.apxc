@@ -1,0 +1,75 @@
+global class PayrollBatch implements Database.Batchable<SObject>, Database.Stateful {
+    global Database.QueryLocator start(Database.BatchableContext BC) {
+        // Query all employees
+        return Database.getQueryLocator([SELECT Id, Basic_Salary__c FROM Employee__c]);
+    }
+    
+    global void execute(Database.BatchableContext BC, List<Employee__c> employeeList) {
+        List<Payroll__c> payrollsToInsert = new List<Payroll__c>();
+        String currentMonth = DateTime.now().format('MMMM'); // Get current month in the format "Month Year"
+        
+        List<Attendance__c> attendanceRecords = [SELECT Employee__c, Month__c, Present_Days__c, Working_Days__c 
+                                                 FROM Attendance__c 
+                                                 WHERE Month__c = :currentMonth];
+        
+        Map<Id, Attendance__c> attendanceMap = new Map<Id, Attendance__c>();
+        
+        for (Attendance__c attendance : attendanceRecords) {
+            attendanceMap.put(attendance.Employee__c, attendance);
+        }
+        
+        for (Employee__c employee : employeeList) {
+            Attendance__c attendance = attendanceMap.get(employee.Id);
+            if (attendance != null) {
+                // Calculate leave deductions
+                Integer unapprovedLeaveDays = getUnapprovedLeaveDays(employee.Id, attendance.Month__c);
+                Decimal leaveDeduction = (employee.Basic_Salary__c != null && Decimal.valueOf(attendance.Working_Days__c) > 0)
+                                          ? (employee.Basic_Salary__c / Decimal.valueOf(attendance.Working_Days__c) ) * unapprovedLeaveDays 
+                                          : 0;
+                Decimal netSalary = (employee.Basic_Salary__c != null ? employee.Basic_Salary__c : 0) - leaveDeduction;
+                
+                // Create Payroll record
+                Payroll__c payroll = new Payroll__c();
+                payroll.Employee__c = employee.Id;
+                payroll.Month__c = attendance.Month__c;
+                payroll.Basic_Salary__c = employee.Basic_Salary__c;
+                payroll.Leave_Deduction__c = leaveDeduction;
+                payroll.Net_Salary__c = netSalary;
+                payroll.Email_Sent__c = false;
+                payrollsToInsert.add(payroll);
+            }
+        }
+        
+        // Insert Payroll records
+        if (!payrollsToInsert.isEmpty()) {
+            insert payrollsToInsert;
+        }
+        
+        for (Employee__c emp : employeeList) {
+            // Get the leave days for the current month
+            Integer leaveDays = LeaveUtility.getLeaveDays(emp.Id, '2025-06'); 
+            
+        }
+        
+        if (!FeatureManagement.checkPermission('Run_Payroll_Batch_Job')) {
+            throw new AuraHandledException('You do not have the necessary permission to run the payroll batch job.');
+        }
+    }
+    
+    global void finish(Database.BatchableContext BC) {
+        
+    }
+    
+    private Integer getUnapprovedLeaveDays(Id employeeId, String month) {
+        List<Leave_Request__c> leaveRequests = [SELECT Id, From_Date__c, To_Date__c
+                                                 FROM Leave_Request__c
+                                                 WHERE Employee__c = :employeeId
+                                                 AND Status__c = 'Pending'
+                                                 AND (From_Date__c <= :Date.today() AND To_Date__c >= :Date.today())];
+        Integer totalUnapprovedDays = 0;
+        for (Leave_Request__c leave : leaveRequests) {
+            totalUnapprovedDays += leave.To_Date__c.daysBetween(leave.From_Date__c) + 1;
+        }
+        return totalUnapprovedDays;
+    }
+}
