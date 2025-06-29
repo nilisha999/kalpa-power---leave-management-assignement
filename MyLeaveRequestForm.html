@@ -1,0 +1,49 @@
+<template>
+  <lightning-card title="Leave Request Form" icon-name="standard:leave_request">
+    <div class="slds-m-around_medium">
+      <lightning-input
+        type="date"
+        label="From Date"
+        onchange={handleInputChange}
+        data-field="fromDate"
+      ></lightning-input>
+      <lightning-input
+        type="date"
+        label="To Date"
+        onchange={handleInputChange}
+        data-field="toDate"
+      ></lightning-input>
+      <lightning-combobox
+        label="Leave Type"
+        value={leaveData.leaveType}
+        options={leaveTypeOptions}
+        onchange={handleInputChange}
+        data-field="leaveType"
+      >
+      </lightning-combobox>
+      <div class="slds-m-top_medium">
+        <lightning-button
+          variant="brand"
+          label="Submit Leave"
+          onclick={handleSubmit}
+        ></lightning-button>
+      </div>
+    </div>
+  </lightning-card>
+
+  <lightning-card title="My Leave History" icon-name="standard:employee_job">
+    <div class="slds-m-around_medium">
+      <template if:true={leaveHistory}>
+        <lightning-datatable
+          key-field="Id"
+          data={leaveHistory}
+          columns={columns}
+        >
+        </lightning-datatable>
+      </template>
+      <template if:false={leaveHistory}>
+        <p>No leave history found.</p>
+      </template>
+    </div>
+  </lightning-card>
+</template>
